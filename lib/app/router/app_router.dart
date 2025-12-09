@@ -1,18 +1,17 @@
-import 'package:altu_life/features/hello_world/presentation/screens/hello_screen.dart';
+import 'package:altu_life/features/home/presentation/screens/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 /// Application router configuration using GoRouter.
 ///
-/// This file defines all routes in the application.
-/// Routes are defined here to enable navigation throughout the app.
+/// Defines the navigation routes for Altu Health app.
 final GoRouter appRouter = GoRouter(
   routes: <RouteBase>[
     GoRoute(
       path: '/',
-      name: 'hello',
+      name: 'home',
       builder: (BuildContext context, GoRouterState state) =>
-          const HelloScreen(),
+          const HomeScreen(),
     ),
   ],
   // Error builder for handling unknown routes

@@ -5,18 +5,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Root application widget.
 ///
-/// This widget wraps the entire application with necessary providers
-/// and configures the theme and routing.
+/// Configures the MaterialApp with:
+/// - Custom theme matching the React app
+/// - GoRouter for navigation
+/// - Riverpod for state management
 class App extends ConsumerWidget {
   /// Creates an [App] widget.
   const App({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => MaterialApp.router(
-    title: 'Altu Life',
+    title: 'Altu Health',
     debugShowCheckedModeBanner: false,
     theme: AppTheme.lightTheme,
     darkTheme: AppTheme.darkTheme,
+    themeMode: ThemeMode.light, // Match React app (light only)
     routerConfig: appRouter,
   );
 }
