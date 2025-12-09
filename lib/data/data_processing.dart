@@ -902,6 +902,7 @@ List<WeeklyRhythm> getWeeklyRhythm(List<DailySummary> data) {
     grouped[d.dayOfWeek].steps += d.steps;
     grouped[d.dayOfWeek].sleep += d.sleepMinutes;
     grouped[d.dayOfWeek].workout += d.workoutMinutes;
+    grouped[d.dayOfWeek].energy += d.activeEnergy;
   }
 
   return grouped.asMap().entries.map((e) {
@@ -913,6 +914,7 @@ List<WeeklyRhythm> getWeeklyRhythm(List<DailySummary> data) {
       steps: (g.steps / count).round(),
       sleep: (g.sleep / count).round(),
       workout: (g.workout / count).round(),
+      energy: (g.energy / count).round(),
     );
   }).toList();
 }
@@ -922,6 +924,7 @@ class _RhythmAccumulator {
   int steps = 0;
   int sleep = 0;
   int workout = 0;
+  int energy = 0;
 }
 
 /// Weekly rhythm data.
@@ -931,11 +934,13 @@ class WeeklyRhythm {
     required this.steps,
     required this.sleep,
     required this.workout,
+    required this.energy,
   });
   final String day;
   final int steps;
   final int sleep;
   final int workout;
+  final int energy;
 }
 
 /// Gets app usage by day of week.

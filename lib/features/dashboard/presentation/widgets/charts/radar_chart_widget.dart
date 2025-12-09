@@ -5,7 +5,7 @@ import 'package:altu_life/data/data_processing.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
-/// Weekly rhythm radar chart showing steps and sleep patterns by day.
+/// Weekly rhythm radar chart showing steps, sleep, and energy patterns by day.
 class WeeklyRhythmRadar extends StatelessWidget {
   const WeeklyRhythmRadar({
     super.key,
@@ -23,6 +23,7 @@ class WeeklyRhythmRadar extends StatelessWidget {
     // Find max values for normalization
     final maxSteps = data.map((d) => d.steps).reduce((a, b) => a > b ? a : b);
     final maxSleep = data.map((d) => d.sleep).reduce((a, b) => a > b ? a : b);
+    final maxEnergy = data.map((d) => d.energy).reduce((a, b) => a > b ? a : b);
 
     return Column(
       children: [
@@ -80,6 +81,17 @@ class WeeklyRhythmRadar extends StatelessWidget {
                   borderWidth: 2,
                   entryRadius: 0,
                 ),
+                // Energy dataset
+                RadarDataSet(
+                  dataEntries: data.map((d) {
+                    final normalized = maxEnergy > 0 ? d.energy / maxEnergy : 0.0;
+                    return RadarEntry(value: normalized * 10000);
+                  }).toList(),
+                  borderColor: AppColors.emerald500,
+                  fillColor: AppColors.emerald500.withValues(alpha: 0.3),
+                  borderWidth: 2,
+                  entryRadius: 0,
+                ),
               ],
             ),
           ),
@@ -91,6 +103,8 @@ class WeeklyRhythmRadar extends StatelessWidget {
             _buildLegendItem('Steps', AppColors.brand500),
             const SizedBox(width: 16),
             _buildLegendItem('Sleep', AppColors.violet500),
+            const SizedBox(width: 16),
+            _buildLegendItem('Energy', AppColors.emerald500),
           ],
         ),
       ],
