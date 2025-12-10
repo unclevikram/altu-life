@@ -72,28 +72,34 @@ class DigitalDietWidget extends StatelessWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.chartColors[
-                                          i % AppColors.chartColors.length],
-                                      shape: BoxShape.circle,
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.chartColors[
+                                            i % AppColors.chartColors.length],
+                                        shape: BoxShape.circle,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    cat.name,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.slate700,
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        cat.name,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.slate700,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
+                              const SizedBox(width: 8),
                               Text(
                                 '${_formatTime(cat.value)} ($percentage%)',
                                 style: const TextStyle(

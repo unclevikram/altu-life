@@ -17,77 +17,116 @@ class WeekdayVsWeekendWidget extends StatelessWidget {
     return HealthCard(
       title: 'Weekday vs Weekend',
       child: Column(
-        children: data.map((stat) {
-          final total = stat.weekday + stat.weekend;
-          final weekdayPercent = total > 0 ? stat.weekday / total : 0.5;
-          final weekendPercent = total > 0 ? stat.weekend / total : 0.5;
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Legend
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _buildLegendItem('Weekday', AppColors.blue500),
+              const SizedBox(width: 12),
+              _buildLegendItem('Weekend', AppColors.purple500),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Data bars
+          ...data.map((stat) {
+            final total = stat.weekday + stat.weekend;
+            final weekdayPercent = total > 0 ? stat.weekday / total : 0.5;
+            final weekendPercent = total > 0 ? stat.weekend / total : 0.5;
 
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  stat.metric,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.slate500,
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    stat.metric,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.slate500,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: AppColors.slate100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Row(
-                    children: [
-                      // Weekday bar
-                      Flexible(
-                        flex: (weekdayPercent * 100).round(),
-                        child: Container(
-                          color: AppColors.blue500,
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            'Wkday ${_formatValue(stat.weekday)}',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                  const SizedBox(height: 6),
+                  Container(
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: AppColors.slate100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Row(
+                      children: [
+                        // Weekday bar
+                        Flexible(
+                          flex: (weekdayPercent * 100).round(),
+                          child: Container(
+                            color: AppColors.blue500,
+                            alignment: Alignment.centerLeft,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              _formatValue(stat.weekday),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ),
-                      // Weekend bar
-                      Flexible(
-                        flex: (weekendPercent * 100).round(),
-                        child: Container(
-                          color: AppColors.purple500,
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            'Wkend ${_formatValue(stat.weekend)}',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                        // Weekend bar
+                        Flexible(
+                          flex: (weekendPercent * 100).round(),
+                          child: Container(
+                            color: AppColors.purple500,
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              _formatValue(stat.weekend),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
+                ],
+              ),
+            );
+          }).toList(),
+        ],
       ),
+    );
+  }
+
+  Widget _buildLegendItem(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            color: AppColors.slate600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 
