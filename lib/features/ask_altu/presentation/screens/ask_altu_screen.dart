@@ -25,9 +25,7 @@ class _AskAltuScreenState extends ConsumerState<AskAltuScreen> {
 
   // Dynamic list of available suggestions
   final List<String> _availableSuggestions = [
-    'What happens to my sleep when I work out?',
     'What one thing could I change to sleep better?',
-    'What am I doing really well?',
     'Compare my weekday vs weekend habits',
     'Is there a connection between my screentime and energy levels?',
   ];
@@ -135,7 +133,7 @@ class _AskAltuScreenState extends ConsumerState<AskAltuScreen> {
                     ),
                   ),
                   Text(
-                    'Powered by Gemini • Private',
+                    'Your Personal Data Nerd • Private',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,

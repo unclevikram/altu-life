@@ -73,6 +73,10 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
 
+  # Testing dependencies
+  mocktail: ^1.0.0          # Modern mocking library (no code generation)
+  test: ^1.25.0             # Dart test framework
+
   # App icon generation
   flutter_launcher_icons: ^0.13.1
 

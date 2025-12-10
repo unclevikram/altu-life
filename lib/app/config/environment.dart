@@ -10,12 +10,6 @@ class Environment {
     defaultValue: 'dev',
   );
 
-  /// Base API URL
-  static const String apiBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'https://api.example.com',
-  );
-
   /// Whether debug mode is enabled
   static const bool isDebug = bool.fromEnvironment('DEBUG', defaultValue: true);
 }

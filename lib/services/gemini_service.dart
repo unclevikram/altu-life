@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:altu_life/data/data_processing.dart';
 import 'package:altu_life/data/models/models.dart';
+import 'package:altu_life/services/ai_context_builder.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
@@ -61,96 +61,9 @@ class GeminiService {
       return _cachedDataContext!;
     }
 
-    developer.log(
-      '🔨 Building comprehensive data context (${data.length} days)',
-      name: 'GeminiService',
-    );
-
-    // Calculate all insights and correlations
-    final bests = getPersonalBests(data);
-    final bestDay = getBestDayStats(data);
-    final sleepAfterWorkout = getSleepAfterWorkoutStats(data);
-    final sleepConsistency = getSleepConsistencyStats(data);
-    final recoveryStats = getRecoverySleepStats(data);
-    final workoutStreaks = getWorkoutStreakStats(data);
-    final weekendSleep = getWeekendSleepStats(data);
-    final appCorrelations = getAppHealthCorrelations(data);
-
-    // Get recent 30 days for detailed queries
-    final recent30Days = data
-        .skip(data.length > 30 ? data.length - 30 : 0)
-        .map((d) => {
-              'date': d.date,
-              'steps': d.steps,
-              'sleep': d.sleepMinutes,
-              'workout': d.workoutMinutes,
-              'energy': d.activeEnergy,
-              'entertainment': d.entertainmentMinutes,
-              'productivity': d.productivityMinutes,
-              'screenTime': d.totalScreenTime,
-              'topApps': d.topApps.take(3).map((a) => '${a.app}:${a.minutes}min').join(', '),
-            })
-        .toList();
-
-    // Build correlation summary
-    final correlationSummary = StringBuffer();
-    final sleepCorrelations = appCorrelations.where((c) => c.metric == 'sleep');
-    final energyCorrelations = appCorrelations.where((c) => c.metric == 'energy');
-
-    if (sleepCorrelations.isNotEmpty) {
-      correlationSummary.writeln('\n**Sleep Correlations:**');
-      for (final corr in sleepCorrelations.take(5)) {
-        final impact = corr.correlation > 0 ? 'improves' : 'reduces';
-        correlationSummary.writeln('- ${corr.app}: ${corr.correlation.toStringAsFixed(2)} ($impact sleep)');
-      }
-    }
-
-    if (energyCorrelations.isNotEmpty) {
-      correlationSummary.writeln('\n**Energy Correlations:**');
-      for (final corr in energyCorrelations.take(3)) {
-        final impact = corr.correlation > 0 ? 'increases' : 'decreases';
-        correlationSummary.writeln('- ${corr.app}: ${corr.correlation.toStringAsFixed(2)} ($impact energy burn)');
-      }
-    }
-
-    _cachedDataContext = '''
-📊 **COMPREHENSIVE HEALTH DATA SUMMARY**
-
-**Personal Bests:**
-- Highest Steps: ${bests?.steps.steps ?? 'N/A'} on ${bests?.steps.date ?? 'N/A'}
-- Longest Workout: ${bests?.workout.workoutMinutes ?? 'N/A'} min on ${bests?.workout.date ?? 'N/A'}
-- Best Sleep: ${((bests?.sleep.sleepMinutes ?? 0) / 60).toStringAsFixed(1)} hrs on ${bests?.sleep.date ?? 'N/A'}
-- Max Energy: ${bests?.energy.activeEnergy ?? 'N/A'} kcal on ${bests?.energy.date ?? 'N/A'}
-
-**Sleep Patterns:**
-- Sleep After Workout: ${sleepAfterWorkout.afterWorkout} min (vs ${sleepAfterWorkout.afterRest} min normal)
-- Sleep Consistency Score: ${sleepConsistency.consistencyScore}/100 (±${sleepConsistency.stdDev} min variation)
-- Weekend Sleep: ${weekendSleep.weekendAvg} min (vs ${weekendSleep.weekdayAvg} min weekday)
-- Recovery Sleep (high exertion): ${recoveryStats.afterHighExertion} min (vs ${recoveryStats.afterLowExertion} min low exertion)
-
-**Workout & Activity:**
-- Max Workout Streak: ${workoutStreaks.maxStreak} days
-- Total Streaks: ${workoutStreaks.totalStreaks} streaks
-- Average Streak Length: ${workoutStreaks.avgStreak.toStringAsFixed(1)} days
-
-**Best Day Pattern:**
-- Best Days Average: ${bestDay?.best.steps ?? 'N/A'} steps, ${bestDay?.best.sleep ?? 'N/A'} min sleep, ${bestDay?.best.workout ?? 'N/A'} min workout
-- Normal Days Average: ${bestDay?.avg.steps ?? 'N/A'} steps, ${bestDay?.avg.sleep ?? 'N/A'} min sleep, ${bestDay?.avg.workout ?? 'N/A'} min workout
-
-**App-Health Correlations:**$correlationSummary
-
-**Recent 30 Days Detailed Data:**
-${jsonEncode(recent30Days)}
-
-**Data Period:** ${data.first.date} to ${data.last.date} (${data.length} days)
-''';
-
-    developer.log(
-      '✅ Data context built and cached',
-      name: 'GeminiService',
-      error: 'Context size: ${_cachedDataContext!.length} characters\n'
-          'Sleep correlations: ${sleepCorrelations.length}\n'
-          'Energy correlations: ${energyCorrelations.length}',
+    _cachedDataContext = AIContextBuilder.buildDataContext(
+      data,
+      serviceName: 'GeminiService',
     );
 
     return _cachedDataContext!;
@@ -208,6 +121,28 @@ ${jsonEncode(recent30Days)}
     throw GeminiException('All retry attempts exhausted.');
   }
 
+  /// Generates a response using a prebuilt system instruction (from orchestrator).
+  Future<String> getAltuResponseWithInstruction(
+    String query,
+    String systemInstruction, {
+    List<Map<String, dynamic>>? conversationHistory,
+    double temperature = 0.8,
+    int maxTokens = 1024,
+  }) async {
+    if (!isConfigured) {
+      throw GeminiException('API Key is not configured.');
+    }
+
+    return _makeApiRequestWithInstruction(
+      query: query,
+      systemInstruction: systemInstruction,
+      conversationHistory: conversationHistory,
+      modelName: _primaryModel,
+      temperature: temperature,
+      maxTokens: maxTokens,
+    );
+  }
+
   /// Makes the actual API request to Gemini.
   Future<String> _makeApiRequest(
     String query,
@@ -215,8 +150,6 @@ ${jsonEncode(recent30Days)}
     List<Map<String, dynamic>>? conversationHistory,
     required String modelName,
   }) async {
-
-    // Build comprehensive context on first message
     final dataContextText = _buildComprehensiveContext(dataContext);
 
     final systemInstruction = '''
@@ -297,178 +230,192 @@ You are Altu, an empathetic, data-driven health assistant who makes personalized
 
 $dataContextText
 ''';
+    return _makeApiRequestWithInstruction(
+      query: query,
+      systemInstruction: systemInstruction,
+      conversationHistory: conversationHistory,
+      modelName: modelName,
+      temperature: 0.8,
+      maxTokens: 8192,
+      dataContextSize: dataContextText.length,
+    );
+  }
 
+  Future<String> _makeApiRequestWithInstruction({
+    required String query,
+    required String systemInstruction,
+    required String modelName,
+    List<Map<String, dynamic>>? conversationHistory,
+    double temperature = 0.8,
+    int maxTokens = 1024,
+    int? dataContextSize,
+  }) async {
     final url = Uri.parse('$_baseUrl/$modelName:generateContent?key=$apiKey');
 
-      // Build conversation contents with history
-      final contents = <Map<String, dynamic>>[];
+    final contents = <Map<String, dynamic>>[];
 
-      // Add conversation history if provided
-      if (conversationHistory != null && conversationHistory.isNotEmpty) {
-        contents.addAll(conversationHistory);
-        developer.log(
-          '💬 Including ${conversationHistory.length} conversation messages',
-          name: 'GeminiService',
-        );
-      }
+    if (conversationHistory != null && conversationHistory.isNotEmpty) {
+      contents.addAll(conversationHistory);
+      developer.log(
+        '💬 Including ${conversationHistory.length} conversation messages',
+        name: 'GeminiService',
+      );
+    }
 
-      // Add current user query
-      contents.add({
-        'role': 'user',
+    contents.add({
+      'role': 'user',
+      'parts': [
+        {'text': query}
+      ],
+    });
+
+    final requestBody = {
+      'contents': contents,
+      'systemInstruction': {
         'parts': [
-          {'text': query}
-        ],
-      });
+          {'text': systemInstruction}
+        ]
+      },
+      'generationConfig': {
+        'temperature': temperature,
+        'maxOutputTokens': maxTokens,
+        'topP': 0.95,
+      },
+    };
 
-      final requestBody = {
-        'contents': contents,
-        'systemInstruction': {
-          'parts': [
-            {'text': systemInstruction}
-          ]
-        },
-        'generationConfig': {
-          'temperature': 0.8,
-          'maxOutputTokens': 8192,
-          'topP': 0.95,
-        },
-      };
+    final requestBodyJson = jsonEncode(requestBody);
 
-      final requestBodyJson = jsonEncode(requestBody);
+    developer.log(
+      '🌐 Sending API request to Gemini',
+      name: 'GeminiService',
+      error: 'Model: $modelName\n'
+          'URL: $_baseUrl/$modelName:generateContent\n'
+          'Request body size: ${requestBodyJson.length} bytes\n'
+          'System instruction size: ${systemInstruction.length} chars\n'
+          'Data context size: ${dataContextSize ?? 0} chars',
+    );
 
+    if (kDebugMode) {
+      print('\n📤 === GEMINI API REQUEST ===');
+      print('Model: $modelName');
+      print('Query: $query');
+      print('Conversation history: ${conversationHistory?.length ?? 0} messages');
+      print('Request body size: ${requestBodyJson.length} bytes');
+      print('============================\n');
+    }
+
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: requestBodyJson,
+    );
+
+    developer.log(
+      '📥 Received API response',
+      name: 'GeminiService',
+      error: 'Status: ${response.statusCode}\n'
+          'Response size: ${response.body.length} bytes',
+    );
+
+    if (kDebugMode) {
+      print('\n📥 === GEMINI API RESPONSE ===');
+      print('Status Code: ${response.statusCode}');
+      print('Response size: ${response.body.length} bytes');
+      print('==============================\n');
+    }
+
+    if (response.statusCode != 200) {
       developer.log(
-        '🌐 Sending API request to Gemini',
+        '❌ API request failed',
         name: 'GeminiService',
-        error: 'Model: $modelName\n'
-            'URL: $_baseUrl/$modelName:generateContent\n'
-            'Request body size: ${requestBodyJson.length} bytes\n'
-            'System instruction size: ${systemInstruction.length} chars\n'
-            'Data context size: ${dataContextText.length} chars',
+        error: 'Status: ${response.statusCode}\nBody: ${response.body}',
+        level: 1000,
       );
 
       if (kDebugMode) {
-        print('\n📤 === GEMINI API REQUEST ===');
-        print('Model: $modelName');
-        print('Query: $query');
-        print('Conversation history: ${conversationHistory?.length ?? 0} messages');
-        print('Request body size: ${requestBodyJson.length} bytes');
-        print('============================\n');
-      }
-
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: requestBodyJson,
-      );
-
-      developer.log(
-        '📥 Received API response',
-        name: 'GeminiService',
-        error: 'Status: ${response.statusCode}\n'
-            'Response size: ${response.body.length} bytes',
-      );
-
-      if (kDebugMode) {
-        print('\n📥 === GEMINI API RESPONSE ===');
+        print('\n🚨 === GEMINI API ERROR RESPONSE ===');
         print('Status Code: ${response.statusCode}');
-        print('Response size: ${response.body.length} bytes');
-        print('==============================\n');
+        print('Error Body: ${response.body}');
+        print('=====================================\n');
       }
 
-      if (response.statusCode != 200) {
-        developer.log(
-          '❌ API request failed',
-          name: 'GeminiService',
-          error: 'Status: ${response.statusCode}\nBody: ${response.body}',
-          level: 1000,
-        );
+      throw GeminiException(
+        'API request failed with status ${response.statusCode}: ${response.body}',
+      );
+    }
 
-        if (kDebugMode) {
-          print('\n🚨 === GEMINI API ERROR RESPONSE ===');
-          print('Status Code: ${response.statusCode}');
-          print('Error Body: ${response.body}');
-          print('=====================================\n');
-        }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
 
-        throw GeminiException(
-          'API request failed with status ${response.statusCode}: ${response.body}',
-        );
+    if (kDebugMode) {
+      print('\n📄 === RESPONSE JSON STRUCTURE ===');
+      print('Keys: ${data.keys.toList()}');
+      if (data.containsKey('candidates')) {
+        print('Candidates count: ${(data['candidates'] as List).length}');
       }
+      print('===================================\n');
+    }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final candidates = data['candidates'] as List<dynamic>?;
+    if (candidates == null || candidates.isEmpty) {
+      developer.log(
+        '⚠️ No candidates in response',
+        name: 'GeminiService',
+        error: 'Response data: ${jsonEncode(data)}',
+        level: 900,
+      );
 
       if (kDebugMode) {
-        print('\n📄 === RESPONSE JSON STRUCTURE ===');
-        print('Keys: ${data.keys.toList()}');
-        if (data.containsKey('candidates')) {
-          print('Candidates count: ${(data['candidates'] as List).length}');
-        }
-        print('===================================\n');
+        print('\n⚠️ === NO CANDIDATES ERROR ===');
+        print('Full response: ${jsonEncode(data)}');
+        print('===============================\n');
       }
 
-      // Extract text from response
-      final candidates = data['candidates'] as List<dynamic>?;
-      if (candidates == null || candidates.isEmpty) {
-        developer.log(
-          '⚠️ No candidates in response',
-          name: 'GeminiService',
-          error: 'Response data: ${jsonEncode(data)}',
-          level: 900,
-        );
+      throw GeminiException('No response generated.');
+    }
 
-        if (kDebugMode) {
-          print('\n⚠️ === NO CANDIDATES ERROR ===');
-          print('Full response: ${jsonEncode(data)}');
-          print('===============================\n');
-        }
+    final finishReason = candidates[0]['finishReason'] as String?;
+    developer.log(
+      '🏁 Finish reason: $finishReason',
+      name: 'GeminiService',
+    );
 
-        throw GeminiException('No response generated.');
-      }
-
-      // Check finish reason to detect truncation
-      final finishReason = candidates[0]['finishReason'] as String?;
+    if (finishReason == 'MAX_TOKENS') {
       developer.log(
-        '🏁 Finish reason: $finishReason',
+        '⚠️ Response truncated due to MAX_TOKENS',
         name: 'GeminiService',
+        level: 900,
+      );
+    }
+
+    final content = candidates[0]['content'] as Map<String, dynamic>?;
+    final parts = content?['parts'] as List<dynamic>?;
+
+    if (parts == null || parts.isEmpty) {
+      developer.log(
+        '⚠️ No parts in candidate content',
+        name: 'GeminiService',
+        error: 'Content: ${jsonEncode(content)}',
+        level: 900,
       );
 
-      if (finishReason == 'MAX_TOKENS') {
-        developer.log(
-          '⚠️ Response truncated due to MAX_TOKENS',
-          name: 'GeminiService',
-          level: 900,
-        );
+      if (kDebugMode) {
+        print('\n⚠️ === NO PARTS ERROR ===');
+        print('Candidate content: ${jsonEncode(content)}');
+        print('=========================\n');
       }
 
-      final content = candidates[0]['content'] as Map<String, dynamic>?;
-      final parts = content?['parts'] as List<dynamic>?;
+      throw GeminiException('Empty response from API.');
+    }
 
-      if (parts == null || parts.isEmpty) {
-        developer.log(
-          '⚠️ No parts in candidate content',
-          name: 'GeminiService',
-          error: 'Content: ${jsonEncode(content)}',
-          level: 900,
-        );
+    final text = parts[0]['text'] as String?;
 
-        if (kDebugMode) {
-          print('\n⚠️ === NO PARTS ERROR ===');
-          print('Candidate content: ${jsonEncode(content)}');
-          print('=========================\n');
-        }
+    developer.log(
+      '✅ Successfully extracted response text',
+      name: 'GeminiService',
+      error: 'Text length: ${text?.length ?? 0} characters',
+    );
 
-        throw GeminiException('Empty response from API.');
-      }
-
-      final text = parts[0]['text'] as String?;
-
-      developer.log(
-        '✅ Successfully extracted response text',
-        name: 'GeminiService',
-        error: 'Text length: ${text?.length ?? 0} characters',
-      );
-
-      return text ?? "I'm having trouble thinking right now. Try again?";
+    return text ?? "I'm having trouble thinking right now. Try again?";
   }
 }
 

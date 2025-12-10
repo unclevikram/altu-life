@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import 'package:altu_life/providers/health_providers.dart';
+import 'package:altu_life/services/ask_altu_orchestrator.dart';
 import 'package:altu_life/services/ai_service_manager.dart';
 import 'package:altu_life/services/gemini_service.dart';
 import 'package:flutter/foundation.dart';
@@ -52,6 +53,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   ChatNotifier(this._ref) : super(_initialState);
 
   final Ref _ref;
+  final AskAltuOrchestrator _orchestrator = AskAltuOrchestrator();
 
   static const _initialState = ChatState(
     messages: [
@@ -63,28 +65,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
       ),
     ],
   );
-
-  /// Builds conversation history in Gemini API format.
-  ///
-  /// Skips the initial greeting message and converts chat messages
-  /// to the format expected by Gemini API.
-  List<Map<String, dynamic>> _buildConversationHistory() {
-    final history = <Map<String, dynamic>>[];
-
-    // Skip the initial greeting message (id: '1')
-    final conversationMessages = state.messages.where((m) => m.id != '1').toList();
-
-    for (final message in conversationMessages) {
-      history.add({
-        'role': message.role == MessageRole.user ? 'user' : 'model',
-        'parts': [
-          {'text': message.text}
-        ],
-      });
-    }
-
-    return history;
-  }
 
   /// Sends a message and gets a response from Gemini.
   Future<void> sendMessage(String text) async {
@@ -132,19 +112,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
         '📊 Data context loaded: ${dataContext.length} days',
         name: 'ChatProvider',
       );
-
-      // Build conversation history (excluding the initial greeting)
-      final conversationHistory = _buildConversationHistory();
-      developer.log(
-        '💬 Conversation history: ${conversationHistory.length} messages',
-        name: 'ChatProvider',
-      );
-
-      // Send message with full conversation context and automatic fallback
-      final response = await aiManager.getAltuResponse(
+      final response = await _orchestrator.answer(
         text,
         dataContext,
-        conversationHistory: conversationHistory,
+        state.messages,
       );
 
       developer.log(

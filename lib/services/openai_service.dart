@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:altu_life/data/data_processing.dart';
 import 'package:altu_life/data/models/models.dart';
+import 'package:altu_life/services/ai_context_builder.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
@@ -62,96 +62,9 @@ class OpenAIService {
       return _cachedDataContext!;
     }
 
-    developer.log(
-      '🔨 Building comprehensive data context (${data.length} days)',
-      name: 'OpenAIService',
-    );
-
-    // Calculate all insights and correlations
-    final bests = getPersonalBests(data);
-    final bestDay = getBestDayStats(data);
-    final sleepAfterWorkout = getSleepAfterWorkoutStats(data);
-    final sleepConsistency = getSleepConsistencyStats(data);
-    final recoveryStats = getRecoverySleepStats(data);
-    final workoutStreaks = getWorkoutStreakStats(data);
-    final weekendSleep = getWeekendSleepStats(data);
-    final appCorrelations = getAppHealthCorrelations(data);
-
-    // Get recent 30 days for detailed queries
-    final recent30Days = data
-        .skip(data.length > 30 ? data.length - 30 : 0)
-        .map((d) => {
-              'date': d.date,
-              'steps': d.steps,
-              'sleep': d.sleepMinutes,
-              'workout': d.workoutMinutes,
-              'energy': d.activeEnergy,
-              'entertainment': d.entertainmentMinutes,
-              'productivity': d.productivityMinutes,
-              'screenTime': d.totalScreenTime,
-              'topApps': d.topApps.take(3).map((a) => '${a.app}:${a.minutes}min').join(', '),
-            })
-        .toList();
-
-    // Build correlation summary
-    final correlationSummary = StringBuffer();
-    final sleepCorrelations = appCorrelations.where((c) => c.metric == 'sleep');
-    final energyCorrelations = appCorrelations.where((c) => c.metric == 'energy');
-
-    if (sleepCorrelations.isNotEmpty) {
-      correlationSummary.writeln('\n**Sleep Correlations:**');
-      for (final corr in sleepCorrelations.take(5)) {
-        final impact = corr.correlation > 0 ? 'improves' : 'reduces';
-        correlationSummary.writeln('- ${corr.app}: ${corr.correlation.toStringAsFixed(2)} ($impact sleep)');
-      }
-    }
-
-    if (energyCorrelations.isNotEmpty) {
-      correlationSummary.writeln('\n**Energy Correlations:**');
-      for (final corr in energyCorrelations.take(3)) {
-        final impact = corr.correlation > 0 ? 'increases' : 'decreases';
-        correlationSummary.writeln('- ${corr.app}: ${corr.correlation.toStringAsFixed(2)} ($impact energy burn)');
-      }
-    }
-
-    _cachedDataContext = '''
-📊 **COMPREHENSIVE HEALTH DATA SUMMARY**
-
-**Personal Bests:**
-- Highest Steps: ${bests?.steps.steps ?? 'N/A'} on ${bests?.steps.date ?? 'N/A'}
-- Longest Workout: ${bests?.workout.workoutMinutes ?? 'N/A'} min on ${bests?.workout.date ?? 'N/A'}
-- Best Sleep: ${((bests?.sleep.sleepMinutes ?? 0) / 60).toStringAsFixed(1)} hrs on ${bests?.sleep.date ?? 'N/A'}
-- Max Energy: ${bests?.energy.activeEnergy ?? 'N/A'} kcal on ${bests?.energy.date ?? 'N/A'}
-
-**Sleep Patterns:**
-- Sleep After Workout: ${sleepAfterWorkout.afterWorkout} min (vs ${sleepAfterWorkout.afterRest} min normal)
-- Sleep Consistency Score: ${sleepConsistency.consistencyScore}/100 (±${sleepConsistency.stdDev} min variation)
-- Weekend Sleep: ${weekendSleep.weekendAvg} min (vs ${weekendSleep.weekdayAvg} min weekday)
-- Recovery Sleep (high exertion): ${recoveryStats.afterHighExertion} min (vs ${recoveryStats.afterLowExertion} min low exertion)
-
-**Workout & Activity:**
-- Max Workout Streak: ${workoutStreaks.maxStreak} days
-- Total Streaks: ${workoutStreaks.totalStreaks} streaks
-- Average Streak Length: ${workoutStreaks.avgStreak.toStringAsFixed(1)} days
-
-**Best Day Pattern:**
-- Best Days Average: ${bestDay?.best.steps ?? 'N/A'} steps, ${bestDay?.best.sleep ?? 'N/A'} min sleep, ${bestDay?.best.workout ?? 'N/A'} min workout
-- Normal Days Average: ${bestDay?.avg.steps ?? 'N/A'} steps, ${bestDay?.avg.sleep ?? 'N/A'} min sleep, ${bestDay?.avg.workout ?? 'N/A'} min workout
-
-**App-Health Correlations:**$correlationSummary
-
-**Recent 30 Days Detailed Data:**
-${jsonEncode(recent30Days)}
-
-**Data Period:** ${data.first.date} to ${data.last.date} (${data.length} days)
-''';
-
-    developer.log(
-      '✅ Data context built and cached',
-      name: 'OpenAIService',
-      error: 'Context size: ${_cachedDataContext!.length} characters\n'
-          'Sleep correlations: ${sleepCorrelations.length}\n'
-          'Energy correlations: ${energyCorrelations.length}',
+    _cachedDataContext = AIContextBuilder.buildDataContext(
+      data,
+      serviceName: 'OpenAIService',
     );
 
     return _cachedDataContext!;
@@ -208,13 +121,33 @@ ${jsonEncode(recent30Days)}
     throw OpenAIException('All retry attempts exhausted.');
   }
 
+  /// Generates a response using a prebuilt system prompt (from orchestrator).
+  Future<String> getAltuResponseWithInstruction(
+    String query,
+    String systemPrompt, {
+    List<Map<String, dynamic>>? conversationHistory,
+    double temperature = 0.8,
+    int maxTokens = 1500,
+  }) async {
+    if (!isConfigured) {
+      throw OpenAIException('OpenAI API Key is not configured.');
+    }
+
+    return _makeApiRequestWithInstruction(
+      query: query,
+      systemPrompt: systemPrompt,
+      conversationHistory: conversationHistory,
+      temperature: temperature,
+      maxTokens: maxTokens,
+    );
+  }
+
   /// Makes the actual API request to OpenAI.
   Future<String> _makeApiRequest(
     String query,
     List<DailySummary> dataContext, {
     List<Map<String, dynamic>>? conversationHistory,
   }) async {
-    // Build comprehensive context on first message
     final dataContextText = _buildComprehensiveContext(dataContext);
 
     final systemPrompt = '''
@@ -295,21 +228,34 @@ You are Altu, an empathetic, data-driven health assistant who makes personalized
 
 $dataContextText
 ''';
+    return _makeApiRequestWithInstruction(
+      query: query,
+      systemPrompt: systemPrompt,
+      conversationHistory: conversationHistory,
+      temperature: 0.8,
+      maxTokens: 2000,
+      dataContextSize: dataContextText.length,
+    );
+  }
 
+  Future<String> _makeApiRequestWithInstruction({
+    required String query,
+    required String systemPrompt,
+    List<Map<String, dynamic>>? conversationHistory,
+    double temperature = 0.8,
+    int maxTokens = 1500,
+    int? dataContextSize,
+  }) async {
     final url = Uri.parse(_baseUrl);
 
-    // Build conversation messages
-    final messages = <Map<String, dynamic>>[];
+    final messages = <Map<String, dynamic>>[
+      {
+        'role': 'system',
+        'content': systemPrompt,
+      }
+    ];
 
-    // Add system message
-    messages.add({
-      'role': 'system',
-      'content': systemPrompt,
-    });
-
-    // Add conversation history if provided
     if (conversationHistory != null && conversationHistory.isNotEmpty) {
-      // Convert from Gemini format to OpenAI format
       for (final msg in conversationHistory) {
         messages.add({
           'role': msg['role'] == 'user' ? 'user' : 'assistant',
@@ -322,7 +268,6 @@ $dataContextText
       );
     }
 
-    // Add current user query
     messages.add({
       'role': 'user',
       'content': query,
@@ -331,8 +276,8 @@ $dataContextText
     final requestBody = {
       'model': model,
       'messages': messages,
-      'temperature': 0.8,
-      'max_tokens': 2000,
+      'temperature': temperature,
+      'max_tokens': maxTokens,
       'top_p': 0.95,
     };
 
@@ -345,7 +290,7 @@ $dataContextText
           'URL: $_baseUrl\n'
           'Request body size: ${requestBodyJson.length} bytes\n'
           'System prompt size: ${systemPrompt.length} chars\n'
-          'Data context size: ${dataContextText.length} chars',
+          'Data context size: ${dataContextSize ?? 0} chars',
     );
 
     if (kDebugMode) {
@@ -411,7 +356,6 @@ $dataContextText
       print('===================================\n');
     }
 
-    // Extract text from response
     final choices = data['choices'] as List<dynamic>?;
     if (choices == null || choices.isEmpty) {
       developer.log(
@@ -433,7 +377,6 @@ $dataContextText
     final message = choices[0]['message'] as Map<String, dynamic>?;
     final content = message?['content'] as String?;
 
-    // Check finish reason
     final finishReason = choices[0]['finish_reason'] as String?;
     developer.log(
       '🏁 Finish reason: $finishReason',

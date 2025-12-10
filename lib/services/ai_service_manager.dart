@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import 'package:altu_life/data/models/models.dart';
+import 'package:altu_life/services/ask_altu_orchestrator.dart';
 import 'package:altu_life/services/gemini_service.dart';
 import 'package:altu_life/services/openai_service.dart';
 import 'package:flutter/foundation.dart';
@@ -236,6 +237,155 @@ class AIServiceManager {
       return error.message;
     }
     return error.toString();
+  }
+
+  /// Gets a response using a prebuilt prompt (system + trimmed history).
+  ///
+  /// This path is used by AskAltuOrchestrator to keep prompts small and
+  /// intent-aware while still leveraging provider fallback.
+  Future<AIResponse> getAltuResponseWithPrompt(
+    String query,
+    AskAltuPrompt prompt,
+  ) async {
+    if (!hasAnyProvider) {
+      throw AIServiceException(
+        'No AI providers are configured. Please add GEMINI_API_KEY or OPENAI_API_KEY to your .env file.',
+      );
+    }
+
+    developer.log(
+      '🤖 Starting AI request with orchestrated prompt',
+      name: 'AIServiceManager',
+      error: 'Intent: ${prompt.intent.name}, Configured: ${configuredProviders.map((p) => p.name).join(", ")}',
+    );
+
+    // Try Gemini first (primary)
+    if (_gemini.isConfigured) {
+      try {
+        developer.log(
+          '🔵 Trying primary provider: Gemini (orchestrated)',
+          name: 'AIServiceManager',
+        );
+
+        final response = await _gemini.getAltuResponseWithInstruction(
+          query,
+          prompt.systemInstruction,
+          conversationHistory: prompt.conversationHistory,
+          temperature: prompt.temperature,
+          maxTokens: prompt.maxTokens,
+        );
+
+        developer.log(
+          '✅ Gemini succeeded',
+          name: 'AIServiceManager',
+          error: 'Response length: ${response.length} chars',
+        );
+
+        return AIResponse(
+          text: response,
+          provider: AIProvider.gemini,
+          isBackup: false,
+        );
+      } catch (e, stackTrace) {
+        developer.log(
+          '⚠️ Gemini failed, trying backup',
+          name: 'AIServiceManager',
+          error: e,
+          stackTrace: stackTrace,
+          level: 900,
+        );
+
+        if (kDebugMode) {
+          print('\n⚠️ === GEMINI FAILED, TRYING BACKUP ===');
+          print('Error: $e');
+          print('========================================\n');
+        }
+
+        if (_openai.isConfigured) {
+          try {
+            developer.log(
+              '🟢 Trying backup provider: OpenAI (orchestrated)',
+              name: 'AIServiceManager',
+            );
+
+            final response = await _openai.getAltuResponseWithInstruction(
+              query,
+              prompt.systemInstruction,
+              conversationHistory: prompt.conversationHistory,
+              temperature: prompt.temperature,
+              maxTokens: prompt.maxTokens,
+            );
+
+            developer.log(
+              '✅ OpenAI (backup) succeeded',
+              name: 'AIServiceManager',
+              error: 'Response length: ${response.length} chars',
+            );
+
+            return AIResponse(
+              text: response,
+              provider: AIProvider.openai,
+              isBackup: true,
+            );
+          } catch (backupError, backupStackTrace) {
+            developer.log(
+              '❌ Both providers failed (orchestrated)',
+              name: 'AIServiceManager',
+              error: 'Primary (Gemini): $e\nBackup (OpenAI): $backupError',
+              stackTrace: backupStackTrace,
+              level: 1000,
+            );
+            throw AIServiceException(
+              'All AI providers failed.\n\nGemini: ${_getErrorMessage(e)}\n\nOpenAI: ${_getErrorMessage(backupError)}',
+            );
+          }
+        } else {
+          rethrow;
+        }
+      }
+    }
+
+    // Gemini not configured; try OpenAI directly
+    if (_openai.isConfigured) {
+      try {
+        developer.log(
+          '🟢 Using OpenAI (Gemini not configured, orchestrated)',
+          name: 'AIServiceManager',
+        );
+
+        final response = await _openai.getAltuResponseWithInstruction(
+          query,
+          prompt.systemInstruction,
+          conversationHistory: prompt.conversationHistory,
+          temperature: prompt.temperature,
+          maxTokens: prompt.maxTokens,
+        );
+
+        developer.log(
+          '✅ OpenAI succeeded',
+          name: 'AIServiceManager',
+          error: 'Response length: ${response.length} chars',
+        );
+
+        return AIResponse(
+          text: response,
+          provider: AIProvider.openai,
+          isBackup: false,
+        );
+      } catch (e, stackTrace) {
+        developer.log(
+          '❌ OpenAI failed (orchestrated)',
+          name: 'AIServiceManager',
+          error: e,
+          stackTrace: stackTrace,
+          level: 1000,
+        );
+
+        throw AIServiceException(_getErrorMessage(e));
+      }
+    }
+
+    throw AIServiceException('No AI providers available.');
   }
 }
 
